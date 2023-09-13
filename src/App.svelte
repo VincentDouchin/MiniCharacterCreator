@@ -3,7 +3,7 @@
   import Display from "./Display.svelte";
   import Section from "./Section.svelte";
   import DragDropList from "./DragDropList.svelte";
-  import { dialog, fs } from "@tauri-apps/api";
+  import { dialog, fs, path } from "@tauri-apps/api";
 
   let tree: fs.FileEntry[] = [];
   let root = "";
@@ -48,17 +48,35 @@
       recursive: true,
     });
     if (newRoot && typeof newRoot === "string") {
-      root = newRoot;
-      localStorage.setItem("root", newRoot);
-      loadTree();
+      if (newRoot.split("\\").at(-1) === "Generic_NPCs") {
+        root = newRoot;
+        localStorage.setItem("root", newRoot);
+        loadTree();
+      } else {
+        dialog.message(
+          'The source directory should be named "Generic_NPCs" and contain the animation folders'
+        );
+      }
     }
   };
 
-  let selected: { path: string; index: number }[] = [];
-  const select = (event: { detail: { path: string; index: number } }) => {
-    selected = selected.some((x) => x.path === event.detail.path)
-      ? selected.filter((x) => x.path !== event.detail.path)
-      : [...selected, event.detail];
+  let selected: { path: string; index: number; name: string }[] = [];
+  const select = (event: {
+    detail: { path: string; index: number; name: string };
+  }) => {
+    if (
+      selected.some(
+        (x) => x.name === event.detail.name && x.path !== event.detail.path
+      )
+    ) {
+      selected = selected.map((x) =>
+        x.name === event.detail.name ? event.detail : x
+      );
+    } else {
+      selected = selected.some((x) => x.path === event.detail.path)
+        ? selected.filter((x) => x.path !== event.detail.path)
+        : [...selected, event.detail];
+    }
   };
   const sortList = (ev: CustomEvent) => {
     selected = ev.detail;
@@ -80,8 +98,32 @@
       localStorage.setItem("targetDir", targetDirectory);
     }
   };
+  let singleFile = false;
+
+  const saveBuffer = async (
+    buffer: HTMLCanvasElement,
+    name: string = "NPC"
+  ) => {
+    if (!targetDirectory) {
+      selectTargetDir();
+    }
+    if (targetDirectory) {
+      const blob = await new Promise<Blob | null>((res) =>
+        buffer.toBlob(res, "png")
+      );
+      if (blob) {
+        await fs.writeBinaryFile(
+          targetDirectory + "/" + name + ".png",
+          await blob.arrayBuffer()
+        );
+      }
+    }
+  };
+
   const generateSprites = async () => {
-    for (const { name } of tree.filter((folder) => folder.children)) {
+    const individualSprites: HTMLCanvasElement[] = [];
+    const animations = tree.filter((folder) => folder.children);
+    for (const { name } of animations) {
       if (!name) return;
       const buffer = document.createElement("canvas");
       buffer.width = 0;
@@ -107,26 +149,51 @@
         buffer.height ||= img.height;
         ctx?.drawImage(img, 0, 0, img.width, img.height);
       }
-      if (!targetDirectory) {
-        selectTargetDir();
-      }
-      if (targetDirectory) {
-        const blob = await new Promise<Blob | null>((res) =>
-          buffer.toBlob(res, "png")
+      individualSprites.push(buffer);
+    }
+    if (singleFile) {
+      const newBuffer = document.createElement("canvas");
+      newBuffer.width = individualSprites.reduce(
+        (acc, v) => Math.max(acc, v.width),
+        0
+      );
+      newBuffer.height = individualSprites.reduce(
+        (acc, v) => acc + v.height,
+        0
+      );
+      let currentHeight = 0;
+      const ctx = newBuffer.getContext("2d");
+      for (const buffer of individualSprites) {
+        ctx?.drawImage(
+          buffer,
+          0,
+          0,
+          buffer.width,
+          buffer.height,
+          0,
+          currentHeight,
+          buffer.width,
+          buffer.height
         );
-        if (blob) {
-          await fs.writeBinaryFile(
-            targetDirectory + "/" + characterName + name + ".png",
-            await blob.arrayBuffer()
-          );
-        }
+        currentHeight += buffer.height;
+      }
+      saveBuffer(newBuffer, characterName || "NPC");
+    } else {
+      for (let i = 0; i < individualSprites.length; i++) {
+        await saveBuffer(
+          individualSprites[i],
+          characterName + animations[i].name
+        );
       }
     }
   };
   $: idle = tree.find((x) => x.name === "Idle")?.children;
+  let buttons;
 </script>
 
-<div style="display:grid;grid-template-columns:400px 1fr auto;">
+<div
+  style="display:grid;grid-template-columns:400px 1fr auto;height:calc(100vh - 2rem);"
+>
   <div
     style="max-height: 100%; overflow: auto;display:flex;flex-direction:column;gap:0.2rem"
   >
@@ -139,34 +206,50 @@
     {/if}
   </div>
   <div
-    style="display:grid;grid-template-columns:1fr;grid-template-rows:1fr;height: 100vh; place-items: center;"
+    style="display:grid;grid-template-columns:1fr;grid-template-rows:1fr;height: 100%; place-items: center;"
   >
-    {#each selected as img}
-      {#key img.path}
-        <div style="grid-area:1/1/1/1">
-          <Display path={img.path} size={300} />
-        </div>
-      {/key}
-    {/each}
+    <div
+      style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;"
+    >
+      {#each selected as img}
+        {#key img.path}
+          <div style="grid-area:1/1/1/1">
+            <Display path={img.path} size={300} />
+          </div>
+        {/key}
+      {/each}
+    </div>
   </div>
-  <div style="display:flex;flex-direction:column">
-    <button on:click={selectDirectory}>Select directory</button>
-    <button on:click={selectTargetDir}>Select target directory</button>
-    <input
-      placeholder="Character name"
-      style="padding:0.5rem"
-      bind:value={characterName}
-    />
-    <button on:click={generateSprites}>Generate sprites</button>
-    <DragDropList list={selected} let:item key="path" on:sort={sortList}>
-      <div style="display:grid;place-items:center">
-        <Display path={item.path} />
-        <button
-          on:click={() => select({ detail: item })}
-          style="font-size:0.8rem">Remove</button
-        >
+  <div style="display:flex;flex-direction:column;height: 100%;">
+    <div bind:this={buttons} style="display:grid;gap:0.2rem;font-size:0.8rem">
+      <button on:click={selectDirectory}>Select source directory</button>
+      <button on:click={selectTargetDir}>Select target directory</button>
+      <input
+        placeholder="Character name"
+        style="padding:0.5rem"
+        bind:value={characterName}
+      />
+      <div>
+        <input bind:value={singleFile} type="checkbox" />
+        Single file
       </div>
-    </DragDropList>
+      <button on:click={generateSprites}>Generate sprites</button>
+      <button on:click={() => (selected = [])}>Clear</button>
+    </div>
+    <div
+      style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ??
+        0 + 10}px);overflow:auto"
+    >
+      <DragDropList list={selected} let:item key="path" on:sort={sortList}>
+        <div style="display:grid;place-items:center">
+          <Display path={item.path} />
+          <button
+            on:click={() => select({ detail: item })}
+            style="font-size:0.8rem">Remove</button
+          >
+        </div>
+      </DragDropList>
+    </div>
   </div>
 </div>
 

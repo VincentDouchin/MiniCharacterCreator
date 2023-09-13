@@ -58,7 +58,8 @@
         "height": 600,
         "resizable": true,
         "title": "Mini character creator",
-        "width": 800
+        "width": 800,
+        "fileDropEnabled": false
       }
     ]
   }

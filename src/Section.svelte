@@ -10,10 +10,11 @@
 	let show = false;
 	const dispatch = createEventDispatcher();
 	const emitSelect = (path: string) => {
-		dispatch("selected", { path, index });
+		dispatch("selected", { path, index, name });
 	};
 	const sendSelected = (event: CustomEvent) => {
 		dispatch("selected", event.detail);
+		console.log(event.detail);
 	};
 	const isFinalDir = (entries: fs.FileEntry[]) => {
 		return entries.every((entry) => !entry.children?.length);
