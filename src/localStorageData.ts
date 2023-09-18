@@ -32,10 +32,14 @@ export const localStorageData = <T extends any>(key: string,initialValue:T) => {
 	}catch(_){
 	}
 	const wrapper = {value}
-	
-    return createRecursiveProxy(wrapper,[],()=>{
-		console.log(wrapper)
-		localStorage.setItem(key,JSON.stringify(wrapper.value))
+
+	return new Proxy(wrapper,{
+	set(_:any, __, value) {
+			wrapper.value = value
+			console.log(value)
+			localStorage.setItem(key,JSON.stringify(wrapper.value))
+			return true
+		},
 	}) as {value:T}
 	
   };

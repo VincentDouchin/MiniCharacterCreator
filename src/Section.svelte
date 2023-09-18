@@ -14,7 +14,6 @@
 	};
 	const sendSelected = (event: CustomEvent) => {
 		dispatch("selected", event.detail);
-		console.log(event.detail);
 	};
 	const isFinalDir = (entries: fs.FileEntry[]) => {
 		return entries.every((entry) => !entry.children?.length);
