@@ -5,6 +5,7 @@
   import DragDropList from "./DragDropList.svelte";
   import { dialog, fs } from "@tauri-apps/api";
   import { localStorageData } from "./localStorageData";
+  import { loadImageFromPath } from "./loadImages";
   let tree: fs.FileEntry[] = [];
   let weapons: fs.FileEntry[] = [];
   const selected = localStorageData<
@@ -130,15 +131,7 @@
       }
     }
   };
-  const loadImageFromPath = (path: string) => {
-    return new Promise<HTMLImageElement>(async (res) => {
-      const content = await fs.readBinaryFile(path);
-      const blob = new Blob([content.buffer], { type: "image/png" });
-      const img = new Image();
-      img.src = URL.createObjectURL(blob);
-      img.onload = () => res(img);
-    });
-  };
+
   const findFirstPixel = (
     img: HTMLImageElement,
     x: number = 0,
