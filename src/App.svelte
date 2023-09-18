@@ -21,7 +21,28 @@
   };
 
   const loadWeapons = async () => {
-    weapons = await fs.readDir(weaponsDir.value, { recursive: true });
+    const loadedWeapons = await fs.readDir(weaponsDir.value, {
+      recursive: true,
+    });
+    weapons = loadedWeapons.map((x) => {
+      if (x.name?.includes("Swing")) {
+        const newChildren = x.children?.map((c) => {
+          if (c.name?.includes(".png")) {
+            return {
+              name: c.name.split(/[._]/).at(-2),
+              children: [
+                { name: c.name + "_f.png", path: c.path },
+                { name: c.name + "_b.png", path: c.path },
+              ],
+            };
+          }
+          return c;
+        }) as fs.FileEntry[];
+
+        return { ...x, children: newChildren };
+      }
+      return x;
+    });
   };
   onMount(async () => {
     if (!tree.length && root.value) {
@@ -115,7 +136,6 @@
       const blob = new Blob([content.buffer], { type: "image/png" });
       const img = new Image();
       img.src = URL.createObjectURL(blob);
-
       img.onload = () => res(img);
     });
   };
@@ -171,7 +191,6 @@
   const getPalette = (human: HTMLImageElement, other: HTMLImageElement) => {
     const h = createBufferFromImage(human)!.getImageData(0, 0, 32, 32).data;
     const o = createBufferFromImage(other)!.getImageData(0, 0, 32, 32).data;
-    console.log(h.filter(Boolean));
     const palettes: palette = [];
     for (let i = 0; i < h.length; i += 4) {
       const color = getColor(h, i);
