@@ -25,8 +25,12 @@ function createRecursiveProxy(target: any, path: string[] = [],callBack:()=>void
 	})
 }
 export const localStorageData = <T extends any>(key: string,initialValue:T) => {
-	const existingValue = localStorage.getItem(key)
-	let value = existingValue?JSON.parse(existingValue) : initialValue ;
+	let value = initialValue
+	try{
+		const existingValue = localStorage.getItem(key)
+		value = existingValue?JSON.parse(existingValue) : initialValue;
+	}catch(_){
+	}
 	const wrapper = {value}
 	
     return createRecursiveProxy(wrapper,[],()=>{
