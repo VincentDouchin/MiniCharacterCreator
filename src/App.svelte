@@ -151,7 +151,7 @@
     context.drawImage(img, 0, 0, img.width, img.height);
     const data = context.getImageData(x, y, 32, 32).data;
     const firstPixel = (data.findIndex((x) => x !== 0) + 1) / 4;
-    const newX = (firstPixel % 32) - 1;
+    const newX = firstPixel % 32;
     const newY = Math.floor(firstPixel / 32);
     return [newX, newY];
   };
@@ -254,7 +254,9 @@
           const [offsetX, offsetY] = findFirstPixel(selectedCharacter, x, y);
           const newX = x + offsetX - imgX;
           const newY = y + offsetY - imgY;
-          ctx?.drawImage(img, 0, y, 32, 32, newX, newY, 32, 32);
+          if (offsetX + offsetY != 0) {
+            ctx?.drawImage(img, 0, y, 32, 32, newX, newY, 32, 32);
+          }
         }
       }
     }
@@ -286,7 +288,7 @@
         buffer.height ||= img.height;
         ctx?.drawImage(img, 0, 0, img.width, img.height);
       }
-      if (name === "Walk") {
+      if (name === "Walk" && weapons.length) {
         for (const weapon of selectedWeapons.value) {
           const humanWalk = await findCorrespondingHuman();
           const characterIndex = selected.value.findIndex((x) =>
@@ -300,6 +302,7 @@
             palette,
             characterIndex
           );
+          saveBuffer(anim!.canvas, characterName.value + weapon);
 
           const chargedFolder = weapons
             ?.find((x) => x.name && x.name.includes("arged"))
@@ -314,10 +317,11 @@
               palette,
               characterIndex
             );
-            saveBuffer(animCharged!.canvas, weapon + "Charged");
+            saveBuffer(
+              animCharged!.canvas,
+              characterName.value + weapon + "Charged"
+            );
           }
-
-          saveBuffer(anim!.canvas, weapon);
         }
       }
       individualSprites.push(buffer);
