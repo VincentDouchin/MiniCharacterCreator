@@ -7,4 +7,4 @@ Also compatible with the [weapon pack](https://krishna-palacio.itch.io/minifanta
 ## this tool doesn't contain the source files, you need to purchase them and select the source directory in order to use it
 
 ![](./screenshots/Screenshot1.png)
-![](./screenshots/Screenshot2.png)
+![](./screenshots/screenshot2.png)
