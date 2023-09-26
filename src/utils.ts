@@ -57,16 +57,17 @@ export const swapPalette = (img: HTMLImageElement, palette: palette) => {
 
 	return src.canvas;
 };
-const getCoordsFromIndex = (index: number) => {
-	const realIndex = (index + 1) / 4
-	const newX = realIndex % 32;
-	const newY = Math.floor(realIndex / 32);
+const getCoordsFromIndex = (index: number, width = 32) => {
+	const realIndex = (index) / 4
+	const newX = realIndex % width;
+	const newY = Math.floor(realIndex / width);
 	return [newX, newY];
 }
 export const findFirstPixel = (
 	img: HTMLImageElement,
 	x: number = 0,
-	y: number = 0
+	y: number = 0,
+	_offser = 0
 ) => {
 
 	const context = createBufferFromImage(img)!
@@ -79,11 +80,11 @@ export const isPixelColor = (data: Uint8ClampedArray) => (index: number, offset 
 	const i = index + offset * 4
 	return data[i] !== 0 && data[i + 1] !== 0 && data[i + 2] !== 0 && (data[i + 3] !== 0 || data[i + 3] !== 255)
 }
-
 export const findBodyPixel = (
 	img: HTMLImageElement,
 	x: number = 0,
-	y: number = 0
+	y: number = 0,
+	_offset = 0
 ) => {
 	const context = createBufferFromImage(img)!
 	const data = context.getImageData(x, y, 32, 32).data;
@@ -104,19 +105,34 @@ export const findFootPixel = (
 	xOffset = 0
 ) => {
 	const context = createBufferFromImage(img)!
-	const data = context.getImageData(x + xOffset, y, 16, 32).data;
+	const data = context.getImageData(x, y, 32, 32).data;
 	let lastRow = 0
 	for (let y = 0; y < data.length; y += 4) {
 		if (isPixelColor(data)(y)) {
 			lastRow = y
 		}
 	}
-	return getCoordsFromIndex(lastRow)
+	const lastY = getCoordsFromIndex(lastRow)[1]
+	const data2 = context.getImageData(x + xOffset, y, 16, 32).data;
+	let lastCoords = [0, 0]
+	for (let y = 0; y < data2.length; y += 4) {
+		const coord = getCoordsFromIndex(y, 16)
+		if (isPixelColor(data2)(y) && coord[1] === lastY) {
+			lastCoords = coord
+		}
+	}
+
+	return lastCoords
 }
+
 export const pixelComparator = (path: string) => {
 
-	if (path.includes('Body')) {
-		return findBodyPixel
+	if (path.includes('Shoes')) {
+		return [findFootPixel, 16] as const
 	}
-	return findFirstPixel
+	if (path.includes('Body')) {
+		return [findBodyPixel, 32] as const
+	}
+	return [findFirstPixel, 32] as const
+
 }

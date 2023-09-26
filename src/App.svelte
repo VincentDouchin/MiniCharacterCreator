@@ -8,27 +8,33 @@
   import { loadImageFromPath } from "./loadImages";
   import { ActionIcon, Button, Card, Checkbox, Chip, Group, Input, SvelteUIProvider, Tabs, Text } from "@svelteuidev/core";
   import Fa from "svelte-fa";
-  import { faFolderOpen, faFileExport, faFileArrowDown, faTrash, faTimes } from "@fortawesome/free-solid-svg-icons";
-  import { getPalette, swapPalette, type palette, findFirstPixel, pixelComparator, findFootPixel } from "./utils";
-  let tree: fs.FileEntry[] = [];
-  let weapons: fs.FileEntry[] = [];
+  import { faFolderOpen, faFileExport, faFileArrowDown, faTrash, faTimes, faSpinner, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
+  import { getPalette, swapPalette, type palette, pixelComparator } from "./utils";
+
   const selected = localStorageData<{ path: string; index: number; name: string }[]>("selected", []);
   let singleFile = false;
 
   const characterName = localStorageData("characterName", "");
-  const root = localStorageData("root", "");
   const targetDirectory = localStorageData("targetDir", "");
+
+  let rootFolder: fs.FileEntry[] = [];
+  const rootDir = localStorageData("root", "");
+  let weaponsFolder: fs.FileEntry[] = [];
   const weaponsDir = localStorageData("weaponsDir", "");
+  let crafting1Folder: fs.FileEntry[] = [];
+  const crafting1Dir = localStorageData("crafting1", "");
+  let crafting2Folder: fs.FileEntry[] = [];
+  const crafting2Dir = localStorageData("crafting2", "");
 
   const loadTree = async () => {
-    tree = await fs.readDir(root.value, { recursive: true });
+    rootFolder = await fs.readDir(rootDir.value, { recursive: true });
   };
 
   const loadWeapons = async () => {
     const loadedWeapons = await fs.readDir(weaponsDir.value, {
       recursive: true,
     });
-    weapons = loadedWeapons.map((x) => {
+    weaponsFolder = loadedWeapons.map((x) => {
       if (x.name?.includes("Swing")) {
         const newChildren = x.children?.map((c) => {
           if (c.name?.includes(".png")) {
@@ -48,46 +54,73 @@
       return x;
     });
   };
+  const loadCrafting1 = async () => {
+    crafting1Folder = await fs.readDir(crafting1Dir.value, { recursive: true });
+  };
+  const loadCrafting2 = async () => {
+    crafting2Folder = await fs.readDir(crafting2Dir.value, { recursive: true });
+  };
   onMount(async () => {
-    if (!tree.length && root.value) {
+    if (!rootFolder.length && rootDir.value) {
       loadTree();
     }
-    if (!weapons.length && weaponsDir.value) {
+    if (!weaponsFolder.length && weaponsDir.value) {
       loadWeapons();
     }
+    if (!crafting1Folder.length && crafting1Dir.value) {
+      loadCrafting1();
+    }
+    if (!crafting2Folder.length && crafting2Dir.value) {
+      loadCrafting2();
+    }
   });
-  const selectDirectory = async () => {
-    const newRoot = await dialog.open({
-      directory: true,
-      multiple: false,
-      recursive: true,
-    });
-    if (newRoot && typeof newRoot === "string") {
-      if (newRoot.split("\\").at(-1) === "Generic_NPCs") {
-        root.value = newRoot;
+
+  const selectRootDirectory = async () => {
+    const dir = await dialog.open({ directory: true, multiple: false, recursive: true });
+    if (dir && typeof dir === "string") {
+      if (dir.split("\\").at(-1) === "Generic_NPCs") {
+        rootDir.value = dir;
         loadTree();
       } else {
-        dialog.message('The source directory should be named "Generic_NPCs" and contain the animation folders');
+        dialog.message('The source directory is the one named "Generic_NPCs" and contain the animation folders');
       }
     }
   };
   const selectWeaponsDir = async () => {
-    const dir = await dialog.open({
-      directory: true,
-      multiple: false,
-    });
+    const dir = await dialog.open({ directory: true, multiple: false });
     if (dir && typeof dir === "string") {
-      weaponsDir.value = dir;
-      loadWeapons();
+      if (dir.split("\\").at(-1) === "Minifantasy_Weapons_Assets") {
+        weaponsDir.value = dir;
+        loadWeapons();
+      } else {
+        dialog.message('The source directory is the one named "Minifantasy_Weapons_Assets"');
+      }
+    }
+  };
+  const selectCrafting1Dir = async () => {
+    const dir = await dialog.open({ directory: true, multiple: false });
+    if (dir && typeof dir === "string") {
+      crafting1Dir.value = dir;
+      loadCrafting1();
+    }
+  };
+  const selectCrafting2Dir = async () => {
+    const dir = await dialog.open({ directory: true, multiple: false });
+    if (dir && typeof dir === "string") {
+      crafting2Dir.value = dir;
+      loadCrafting2();
     }
   };
   const selectTargetDir = async () => {
-    const newTargetDir = await dialog.open({
-      directory: true,
-      multiple: false,
-    });
+    const newTargetDir = await dialog.open({ directory: true, multiple: false });
     if (newTargetDir && typeof newTargetDir === "string") {
       targetDirectory.value = newTargetDir;
+    }
+  };
+  const selectedAnimations = localStorageData<string[]>("weaponsSelected", []);
+  const selectWeapon = (name?: string) => {
+    if (name) {
+      selectedAnimations.value = selectedAnimations.value.includes(name) ? selectedAnimations.value.filter((x) => x !== name) : [...selectedAnimations.value, name];
     }
   };
 
@@ -98,6 +131,7 @@
       selected.value = selected.value.some((x) => x.path === event.detail.path) ? selected.value.filter((x) => x.path !== event.detail.path) : [...selected.value, event.detail];
     }
   };
+
   const sortList = (ev: CustomEvent) => {
     selected.value = ev.detail;
   };
@@ -123,7 +157,7 @@
     Orc: "greenskin",
   }[race];
   const findCorrespondingHuman = async () => {
-    const humanWalk = tree
+    const humanWalk = rootFolder
       ?.find((x) => x?.name === "Walk")
       ?.children?.find((x) => x?.name === "_Characters")
       ?.children?.find((x) => x?.name === race)
@@ -131,53 +165,51 @@
     return await loadImageFromPath(humanWalk!.path);
   };
 
-  const getWeaponAnimations = async (folder: fs.FileEntry, name: string, images: HTMLImageElement[], palette: palette, characterIndex: number) => {
-    const character = folder?.children?.find((x) => x.name === "_Characters");
-    const weapon = folder?.children?.find((x) => x.name === name);
-    const selectedCharacter = await loadImageFromPath(character?.children?.find((x) => x.name?.includes(race?.toLowerCase() ?? ""))?.path!);
+  const getWeaponAnimations = async (animationData: animationData, images: HTMLImageElement[], palette: palette, characterIndex: number) => {
+    if (!animationData.character) return;
+    const selectedCharacter = await loadImageFromPath(animationData.character);
     const characterPaletteSwapped = swapPalette(selectedCharacter, palette);
-    const front = await loadImageFromPath(weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "f")?.path!);
-    const back = await loadImageFromPath(weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "b")?.path!);
+    const front = animationData.front ? await loadImageFromPath(animationData.front) : null;
+    const back = animationData.back ? await loadImageFromPath(animationData.back) : null;
     const buffer = document.createElement("canvas");
     buffer.width = selectedCharacter.width;
     buffer.height = selectedCharacter.height;
     const ctx = buffer.getContext("2d", { alpha: true });
-    ctx?.drawImage(back, 0, 0);
+    back && ctx?.drawImage(back, 0, 0);
     ctx?.drawImage(characterPaletteSwapped, 0, 0);
     for (let i = 1; i < images.length; i++) {
       const img = images[i];
+      const [comparator, width] = pixelComparator(selected.value[i].path);
       for (let x = 0; x < buffer.width; x += 32) {
         for (let y = 0; y < buffer.height; y += 32) {
-          if (selected.value[i].path.includes("Shoes")) {
-            for (let foot = 0; foot < 32; foot += 16) {
-              const [imgX, imgY] = findFootPixel(images[characterIndex], 0, y, foot);
-              const [offsetX, offsetY] = findFootPixel(selectedCharacter, x, y, foot);
+          for (let foot = 0; foot < 32; foot += width) {
+            const [imgX, imgY] = comparator(images[characterIndex], 0, y, foot);
+            const [offsetX, offsetY] = comparator(selectedCharacter, x, y, foot);
+
+            if (!(offsetX === 0 && offsetY === 0)) {
               const newX = x + offsetX - imgX;
               const newY = y + offsetY - imgY;
               if (offsetX + offsetY != 0) {
-                ctx?.drawImage(img, 0 + foot, y, 16, 32, newX + foot, newY, 16, 32);
+                ctx?.drawImage(img, 0 + foot, y, width, 32, newX + foot, newY, width, 32);
               }
-            }
-          } else {
-            const comparator = pixelComparator(selected.value[i].path);
-            const [imgX, imgY] = comparator(images[characterIndex], 0, y);
-            const [offsetX, offsetY] = comparator(selectedCharacter, x, y);
-            const newX = x + offsetX - imgX;
-            const newY = y + offsetY - imgY;
-            if (offsetX + offsetY != 0) {
-              ctx?.drawImage(img, 0, y, 32, 32, newX, newY, 32, 32);
             }
           }
         }
       }
     }
-    ctx?.drawImage(front, 0, 0);
-    return ctx;
+    front && ctx?.drawImage(front, 0, 0);
+    if (ctx) {
+      saveBuffer(ctx.canvas, characterName.value + animationData.name);
+    }
+    for (const additionalAnimations of animationData.more) {
+      getWeaponAnimations(additionalAnimations, images, palette, characterIndex);
+    }
   };
 
   const generateSprites = async () => {
+    loading = true;
     const individualSprites: HTMLCanvasElement[] = [];
-    const animations = tree.filter((folder) => folder.children);
+    const animations = rootFolder.filter((folder) => folder.children);
     if (!selected.value.some((x) => x.path.includes("_Character"))) {
       return dialog.message("at least one base character is needed to generate the animations");
     }
@@ -198,22 +230,14 @@
         buffer.height ||= img.height;
         ctx?.drawImage(img, 0, 0, img.width, img.height);
       }
-      if (name === "Walk" && weapons.length) {
-        for (const weapon of selectedWeapons.value) {
+      if (name === "Walk" && weaponsFolder.length) {
+        for (const animation of selectedAnimations.value) {
           const humanWalk = await findCorrespondingHuman();
           const characterIndex = selected.value.findIndex((x) => x.path.includes("_Character"));
+          const data = getAnimationData();
           const palette = getPalette(humanWalk, images[characterIndex]);
-          const anim = await getWeaponAnimations(weapons.find((f) => f.children?.some((c) => c.name === weapon))!, weapon, images, palette, characterIndex);
-          saveBuffer(anim!.canvas, characterName.value + weapon);
-
-          const chargedFolder = weapons
-            ?.find((x) => x.name && x.name.includes("arged"))
-            ?.children?.find((f) => {
-              return f.children?.some((c) => c.name === weapon);
-            });
-          if (chargedFolder) {
-            const animCharged = await getWeaponAnimations(chargedFolder, weapon, images, palette, characterIndex);
-            saveBuffer(animCharged!.canvas, characterName.value + weapon + "Charged");
+          if (data[animation]) {
+            await getWeaponAnimations(data[animation], images, palette, characterIndex);
           }
         }
       }
@@ -235,27 +259,100 @@
         await saveBuffer(individualSprites[i], characterName.value + animations[i].name);
       }
     }
+    loading = false;
+    finished = true;
+    setTimeout(() => (finished = false), 1000);
   };
-  $: idle = tree.find((x) => x.name === "Idle")?.children;
-  let buttons;
+
+  $: idle = rootFolder.find((x) => x.name === "Idle")?.children;
+  const findCharacterFolder = (folder: fs.FileEntry): fs.FileEntry | null => {
+    let found: fs.FileEntry | null = null;
+    const find = (folder: fs.FileEntry) => {
+      if (folder.children) {
+        for (const children of folder.children) {
+          if (children.name?.includes("Character")) {
+            found = children;
+          } else if (children.children) {
+            find(children);
+          }
+        }
+      }
+    };
+    find(folder);
+    return found;
+  };
+
   const getWeaponsEntries = (folders: fs.FileEntry[]) => {
     return folders.filter((f) => "children" in f && !f.name?.includes("_"));
   };
-  const selectedWeapons = localStorageData<string[]>("weaponsSelected", []);
-  const selectWeapon = (name?: string) => {
-    if (name) {
-      selectedWeapons.value = selectedWeapons.value.includes(name) ? selectedWeapons.value.filter((x) => x !== name) : [...selectedWeapons.value, name];
-    }
+  type animationData = {
+    character?: string;
+    front?: string;
+    back?: string;
+    more: animationData[];
+    name: string;
   };
+  const findImagePath = (folder: fs.FileEntry, key: string) => folder?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === key)?.path;
+  const getAnimationData = () => {
+    const result: Record<string, animationData> = {};
+    // Weapons
+    const charged = weaponsFolder.find((x) => x.name?.includes("Charged"));
+    for (const folder of weaponsFolder) {
+      if (!folder.name?.includes("Charged")) {
+        const characters = findCharacterFolder(folder);
+        if (characters) {
+          for (const weapon of folder?.children ?? []) {
+            if (weapon.name && !weapon.name.includes("_") && weapon.children) {
+              const character = findImagePath(characters, race?.toLowerCase());
+              const front = findImagePath(weapon, "f");
+              const back = findImagePath(weapon, "b");
+              const res: animationData = { character, front, back, more: [], name: weapon.name };
+              const chargedFolder = charged?.children
+                ?.map((x) => x.children)
+                .flat()
+                .find((x) => x?.name === weapon.name);
+              if (chargedFolder) {
+                const chargedFront = findImagePath(chargedFolder, "f");
+                const chargedBack = findImagePath(chargedFolder, "b");
+                const more = { character, front: chargedFront, back: chargedBack, more: [], name: "Charged" + weapon.name };
+                res.more.push(more);
+              }
+              result[weapon.name] = res;
+            }
+          }
+        }
+      }
+    }
+    // Crafting
+    for (const profession of [...crafting1Folder, ...crafting2Folder]) {
+      for (const folder of profession.children ?? []) {
+        const characters = findCharacterFolder(folder);
+        if (characters && folder.name) {
+          const character = characters?.children?.find((x) => x.name?.includes(race?.toLowerCase()))?.path;
+          result[folder.name] = { character, more: [], name: folder.name };
+        }
+      }
+    }
+    console.log(result);
+    return result;
+  };
+  let buttons;
   let buttonsLeft: HTMLDivElement | null = null;
+  let loading = false;
+  let finished = false;
+  $: crafting = [
+    [crafting1Dir, 1, selectCrafting1Dir, crafting1Folder],
+    [crafting2Dir, 2, selectCrafting2Dir, crafting2Folder],
+  ] as const;
 </script>
 
 <SvelteUIProvider themeObserver="dark">
-  <div style="display:grid;grid-template-columns:400px 1fr auto auto;gap:1rem;height:calc(100vh - 2rem);">
+  <div style="display:grid;grid-template-columns:400px 1fr auto 300px;gap:1rem;height:calc(100vh - 2rem);">
+    <!-- !CLOTHES -->
     <div>
       <div bind:this={buttonsLeft}>
-        <Button color="gray" on:click={selectDirectory} style="background:{root.value ? '' : 'red'};width:100%"
-          ><Fa slot="leftIcon" icon={faFolderOpen} />
+        <Button color="gray" on:click={selectRootDirectory} style="background:{rootDir.value ? '' : 'red'};width:100%">
+          <Fa slot="leftIcon" icon={faFolderOpen} />
           Select source directory<br />(Generic_NPCs)
         </Button>
       </div>
@@ -277,7 +374,7 @@
         </div>
       {/if}
     </div>
-
+    <!-- !CONTROLS -->
     <div style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;height: 100%; place-items: center;">
       <div>
         <Group>
@@ -289,12 +386,12 @@
           <Checkbox label=" Single file" bind:value={singleFile} type="checkbox" />
 
           <Button color="gray" on:click={generateSprites} style="margin:auto">
-            <Fa slot="leftIcon" icon={faFileExport} />
+            <Fa slot="leftIcon" icon={loading ? faSpinner : finished ? faCheckCircle : faFileExport} color={finished ? "#33cc33" : ""} pulse={loading} />
             Generate sprites
           </Button>
         </Group>
       </div>
-      <div style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;">
+      <Card shadow="xl" radius="xl" style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;">
         {#each selected.value as img}
           {#key img.path}
             <div style="grid-area:1/1/1/1">
@@ -302,8 +399,9 @@
             </div>
           {/key}
         {/each}
-      </div>
+      </Card>
     </div>
+    <!-- !DISPLAY -->
     <div style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem">
       <div bind:this={buttons} style="display:grid;gap:0.2rem;">
         <Button color="gray" on:click={() => (selected.value = [])}>
@@ -324,34 +422,65 @@
         </DragDropList>
       </div>
     </div>
-    <div>
+    <!-- !TABS -->
+    <div style="font-size:0.8rem">
       <Text align="center" size="lg" weight="bold">Animations</Text>
       <Tabs>
+        <!-- !WEAPONS -->
         <Tabs.Tab label="Weapons">
-          <div style="font-size:0.8rem;display:flex;gap:0.5rem;flex-direction:column">
+          <div style="display:flex;gap:0.5rem;flex-direction:column">
             <Button color="gray" on:click={selectWeaponsDir} style="background:{weaponsDir.value ? '' : 'red'};width:100%">
               <Fa slot="leftIcon" icon={faFolderOpen} />
               Select source directory<br />(Weapons)
             </Button>
             <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
-              {#each weapons.filter((x) => !x.name?.includes("harged")) as { name, children }}
+              {#each weaponsFolder.filter((x) => !x.name?.includes("harged")) as { name, children }}
                 <Card shadow="sm" padding="md">
                   <Card.Section first padding="xs">
                     <h4>
                       {name?.replaceAll("_", " ")}
                     </h4>
                   </Card.Section>
-
                   <Group spacing="xs" direction="column">
                     {#if name && children}
                       {#each getWeaponsEntries(children) as weapon}
-                        <Chip size="xs" variant="filled" checked={weapon.name && selectedWeapons.value.includes(weapon.name)} on:click={() => selectWeapon(weapon.name)}>{weapon.name}</Chip>
+                        <Chip size="xs" variant="filled" checked={weapon.name && selectedAnimations.value.includes(weapon.name)} on:click={() => selectWeapon(weapon.name)}>{weapon.name}</Chip>
                       {/each}
                     {/if}
                   </Group>
                 </Card>
               {/each}
             </div>
+          </div>
+        </Tabs.Tab>
+        <!-- !CRAFTING -->
+        <Tabs.Tab label="Crafting">
+          <div style="display:flex;gap:0.5rem;flex-direction:column">
+            {#each crafting as [dir, nb, select, folder]}
+              <Button color="gray" on:click={select} style="background:{dir.value ? '' : 'red'};width:100%">
+                <Fa slot="leftIcon" icon={faFolderOpen} />
+                Select source directory<br />(Crafting {nb})
+              </Button>
+
+              <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
+                {#each folder.filter((x) => x.name?.includes("Prof") && x?.children) as { name, children }}
+                  <Card shadow="sm" padding="md">
+                    <Card.Section first padding="xs">
+                      <h4>
+                        {name?.replaceAll("_", " ")}
+                      </h4>
+                    </Card.Section>
+                    <Group spacing="xs" direction="column">
+                      {#if name && children}
+                        {#each getWeaponsEntries(children).filter(findCharacterFolder) as weapon}
+                          <Chip size="xs" variant="filled" checked={weapon.name && selectedAnimations.value.includes(weapon.name)} on:click={() => selectWeapon(weapon.name)}>{weapon.name}</Chip>
+                        {/each}
+                      {/if}
+                    </Group>
+                  </Card>
+                {/each}
+              </div>
+            {/each}
           </div>
         </Tabs.Tab>
       </Tabs>
@@ -362,5 +491,9 @@
 <style global>
   :global(.svelteui-AccordionItem-panel) {
     padding: 0px 0px 10px 0px !important;
+  }
+  :global(.svelteui-AccordionItem-controlContent:not(.svelteui-AccordionItem-root .svelteui-AccordionItem-root .svelteui-AccordionItem-controlContent)) {
+    text-decoration: underline;
+    font-weight: bold;
   }
 </style>
