@@ -6,6 +6,27 @@
   import { dialog, fs } from "@tauri-apps/api";
   import { localStorageData } from "./localStorageData";
   import { loadImageFromPath } from "./loadImages";
+  import {
+    ActionIcon,
+    Button,
+    Card,
+    Checkbox,
+    Chip,
+    Group,
+    Input,
+    SvelteUIProvider,
+    Tabs,
+    Text,
+  } from "@svelteuidev/core";
+  import Fa from "svelte-fa";
+  import {
+    faFolderOpen,
+    faFileExport,
+    faFileArchive,
+    faFileArrowDown,
+    faTrash,
+    faTimes,
+  } from "@fortawesome/free-solid-svg-icons";
   let tree: fs.FileEntry[] = [];
   let weapons: fs.FileEntry[] = [];
   const selected = localStorageData<
@@ -376,116 +397,179 @@
         : [...selectedWeapons.value, name];
     }
   };
+  let buttonsLeft: HTMLDivElement | null = null;
 </script>
 
-<div
-  style="display:grid;grid-template-columns:400px 1fr auto auto;gap:1rem;height:calc(100vh - 2rem);"
->
+<SvelteUIProvider themeObserver="dark">
   <div
-    style="max-height: 100%; overflow: auto;display:flex;flex-direction:column;gap:0.2rem"
+    style="display:grid;grid-template-columns:400px 1fr auto auto;gap:1rem;height:calc(100vh - 2rem);"
   >
-    {#if idle}
-      {#each idle as { name, children }}
-        {#if children && name}
-          <Section
-            {name}
-            {children}
-            on:selected={select}
-            selected={selected.value}
-          />
-        {/if}
-      {/each}
-    {/if}
-  </div>
-  <div
-    style="display:grid;grid-template-columns:1fr;grid-template-rows:1fr;height: 100%; place-items: center;"
-  >
-    <div
-      style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;"
-    >
-      {#each selected.value as img}
-        {#key img.path}
-          <div style="grid-area:1/1/1/1">
-            <Display path={img.path} size={300} />
-          </div>
-        {/key}
-      {/each}
-    </div>
-  </div>
-  <div style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem">
-    <div bind:this={buttons} style="display:grid;gap:0.2rem;">
-      <button
-        on:click={selectDirectory}
-        style="background:{root.value ? '' : 'red'}"
-        >Select source directory<br />(Generic_NPCs)</button
-      >
-      <button
-        on:click={selectTargetDir}
-        style="background:{targetDirectory.value ? '' : 'red'}"
-        >Select target directory</button
-      >
-      <input
-        placeholder="Character name"
-        style="padding:0.5rem"
-        bind:value={characterName.value}
-      />
-      <div>
-        <input bind:value={singleFile} type="checkbox" />
-        Single file
+    <div>
+      <div bind:this={buttonsLeft}>
+        <Button
+          color="gray"
+          on:click={selectDirectory}
+          style="background:{root.value ? '' : 'red'};width:100%"
+          ><Fa slot="leftIcon" icon={faFolderOpen} />
+          Select source directory<br />(Generic_NPCs)
+        </Button>
       </div>
-      <button on:click={generateSprites}>Generate sprites</button>
-      <button on:click={() => (selected.value = [])}>Clear</button>
+      {#if idle}
+        <div
+          style="max-height:calc(100vh - 2rem - {buttonsLeft.clientHeight}px);overflow-y:auto"
+        >
+          <Tabs>
+            {#each [["Body", "Body"], ["Head", "Head"], ["Characters", "_Characters"]] as [label, name]}
+              <Tabs.Tab {label}>
+                {#if idle.find((x) => x.name === name)?.children}
+                  {#each idle.find((x) => x.name === name)?.children ?? [] as child}
+                    <div>
+                      <Section
+                        name={child.name ?? ""}
+                        children={child.children ?? []}
+                        on:selected={select}
+                        selected={selected.value}
+                      />
+                    </div>
+                  {/each}
+                {/if}
+              </Tabs.Tab>
+            {/each}
+          </Tabs>
+        </div>
+      {/if}
+    </div>
+
+    <div
+      style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;height: 100%; place-items: center;"
+    >
+      <div>
+        <Group>
+          <Button
+            color="gray"
+            on:click={selectTargetDir}
+            style="background:{targetDirectory.value ? '' : 'red'}"
+          >
+            <Fa slot="leftIcon" icon={faFileArrowDown} />
+            Select target directory
+          </Button>
+          <Input
+            placeholder="Character name"
+            style="padding:0.5rem"
+            bind:value={characterName.value}
+          />
+          <Checkbox
+            label=" Single file"
+            bind:value={singleFile}
+            type="checkbox"
+          />
+
+          <Button color="gray" on:click={generateSprites} style="margin:auto">
+            <Fa slot="leftIcon" icon={faFileExport} />
+            Generate sprites
+          </Button>
+        </Group>
+      </div>
+      <div
+        style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;"
+      >
+        {#each selected.value as img}
+          {#key img.path}
+            <div style="grid-area:1/1/1/1">
+              <Display path={img.path} size={300} />
+            </div>
+          {/key}
+        {/each}
+      </div>
     </div>
     <div
-      style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ??
-        0 + 10}px);overflow:auto"
+      style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem"
     >
-      <DragDropList
-        list={selected.value}
-        let:item
-        key="path"
-        on:sort={sortList}
+      <div bind:this={buttons} style="display:grid;gap:0.2rem;">
+        <Button color="gray" on:click={() => (selected.value = [])}>
+          <Fa slot="leftIcon" icon={faTrash} />
+          Clear</Button
+        >
+      </div>
+      <div
+        style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ??
+          0 + 10}px);overflow:auto"
       >
-        <div style="display:grid;place-items:center">
-          <Display path={item.path} />
-          <button
-            on:click={() => select({ detail: item })}
-            style="font-size:0.8rem">Remove</button
+        <DragDropList
+          list={selected.value}
+          let:item
+          key="path"
+          on:sort={sortList}
+        >
+          <div style="display:grid;place-items:center">
+            <Card padding="xs" style="position:relative">
+              <ActionIcon
+                variant="filled"
+                style="position:absolute;top:0px;right:0px"
+                on:click={() => select({ detail: item })}
+              >
+                <Fa icon={faTimes} />
+              </ActionIcon>
+              <Display path={item.path} />
+            </Card>
+            <!-- <button
+             
+              style="font-size:0.8rem">Remove</button
+            > -->
+          </div>
+        </DragDropList>
+      </div>
+    </div>
+    <div>
+      <Text align="center" size="lg" weight="bold">Animations</Text>
+      <Tabs>
+        <Tabs.Tab label="Weapons">
+          <div
+            style="font-size:0.8rem;display:flex;gap:0.5rem;flex-direction:column"
           >
-        </div>
-      </DragDropList>
+            <Button
+              color="gray"
+              on:click={selectWeaponsDir}
+              style="background:{weaponsDir.value ? '' : 'red'};width:100%"
+            >
+              <Fa slot="leftIcon" icon={faFolderOpen} />
+              Select source directory<br />(Weapons)
+            </Button>
+            <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
+              {#each weapons.filter((x) => !x.name?.includes("harged")) as { name, children }}
+                <Card shadow="sm" padding="md">
+                  <Card.Section first padding="xs">
+                    <h4>
+                      {name?.replaceAll("_", " ")}
+                    </h4>
+                  </Card.Section>
+
+                  <Group spacing="xs" direction="column">
+                    {#if name && children}
+                      {#each getWeaponsEntries(children) as weapon}
+                        <Chip
+                          size="xs"
+                          variant="filled"
+                          checked={weapon.name &&
+                            selectedWeapons.value.includes(weapon.name)}
+                          on:click={() => selectWeapon(weapon.name)}
+                          >{weapon.name}
+                        </Chip>
+                      {/each}
+                    {/if}
+                  </Group>
+                </Card>
+              {/each}
+            </div>
+          </div>
+        </Tabs.Tab>
+      </Tabs>
     </div>
   </div>
-  <div style="font-size:0.8rem;display:flex;gap:0.5rem;flex-direction:column">
-    <button
-      on:click={selectWeaponsDir}
-      style="background:{weaponsDir.value ? '' : 'red'}"
-      >Select source directory<br />(Weapons)</button
-    >
-    {#each weapons.filter((x) => !x.name?.includes("harged")) as { name, children }}
-      <button
-        on:click={() => selectAttackCategory(name)}
-        style="background:hsl(0, 0%, 0%);color:{children?.some(
-          (w) => w.name && selectedWeapons.value.includes(w.name)
-        )
-          ? '#33cc33'
-          : ''}">{name?.replaceAll("_", " ")}</button
-      >
-      {#if name && children && weaponsShown.includes(name)}
-        {#each getWeaponsEntries(children) as weapon}
-          <button
-            style="background:hsl(0, 0%, 20%);color:{weapon.name &&
-            selectedWeapons.value.includes(weapon.name)
-              ? '#33cc33'
-              : ''}"
-            on:click={() => selectWeapon(weapon.name)}
-            >{weapon.name}
-          </button>
-        {/each}
-      {/if}
-    {/each}
-  </div>
-</div>
+</SvelteUIProvider>
 
-<style>
+<style global>
+  :global(.svelteui-AccordionItem-panel) {
+    padding: 0px 0px 10px 0px !important;
+  }
 </style>

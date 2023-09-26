@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount } from "svelte";
-
+	import { Accordion, Card, UnstyledButton } from "@svelteuidev/core";
 	import Display from "./Display.svelte";
 	import type { fs } from "@tauri-apps/api";
 	export let selected: { path: string; index: number }[];
 	export let name: string;
 	export let children: fs.FileEntry[];
 	export let index = 0;
-	let show = false;
+
 	const dispatch = createEventDispatcher();
 	const emitSelect = (path: string) => {
 		dispatch("selected", { path, index, name });
@@ -23,38 +23,48 @@
 	};
 </script>
 
-<button
-	on:click={() => (show = !show)}
-	style="width:100%; background:hsl(0, 0%, {index * 20}%)"
-	>{name.replaceAll("_", "")}</button
->
+<Accordion radius="xs" variant={index === 0 ? "default" : "filled"}>
+	<Accordion.Item radius="xs" value={name}>
+		<div slot="control">
+			{name.replaceAll("_", "")}
+		</div>
 
-{#if show}
-	<div class={isFinalDir(children) ? "grid" : "contents"}>
-		{#each children as item}
-			{#if isImage(item)}
-				<button
-					on:click={() => emitSelect(item.path)}
-					class={selected.some((x) => x.path === item.path)
-						? "selected"
-						: ""}
-					style="border:solid;border-radius:10px;padding:0"
-				>
-					<div>{item.name?.split(/[._]/).at(-2) ?? item.name}</div>
-					<Display path={item.path} />
-				</button>
-			{:else if item.children?.length}
-				<svelte:self
-					{selected}
-					name={item.name}
-					on:selected={sendSelected}
-					children={item.children}
-					index={index + 1}
-				/>
-			{/if}
-		{/each}
-	</div>
-{/if}
+		<div class={isFinalDir(children) ? "grid" : "contents"}>
+			{#each children as item}
+				{#if isImage(item)}
+					<Card
+						padding="xl"
+						style="background:{selected.some(
+							(x) => x.path === item.path
+						)
+							? 'var(--svelteui-colors-dark500)'
+							: 'var(--svelteui-colors-dark700)'}"
+					>
+						<Card.Section first padding="xs">
+							<UnstyledButton
+								on:click={() => emitSelect(item.path)}
+								aria-label={item.name}
+							>
+								<Display path={item.path} />
+							</UnstyledButton>
+						</Card.Section>
+						<Card.Section padding="xs">
+							{item.name?.split(/[._]/).at(-2) ?? item.name}
+						</Card.Section>
+					</Card>
+				{:else if item.children?.length}
+					<svelte:self
+						{selected}
+						name={item.name}
+						on:selected={sendSelected}
+						children={item.children}
+						index={index + 1}
+					/>
+				{/if}
+			{/each}
+		</div>
+	</Accordion.Item>
+</Accordion>
 
 <style>
 	.grid {
