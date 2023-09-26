@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from "svelte";
+	import { createEventDispatcher } from "svelte";
 	import { Accordion, Card, UnstyledButton } from "@svelteuidev/core";
 	import Display from "./Display.svelte";
 	import type { fs } from "@tauri-apps/api";
@@ -75,8 +75,5 @@
 	}
 	.contents {
 		display: contents;
-	}
-	.selected {
-		background-color: gray;
 	}
 </style>

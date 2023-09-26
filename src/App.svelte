@@ -512,10 +512,6 @@
               </ActionIcon>
               <Display path={item.path} />
             </Card>
-            <!-- <button
-             
-              style="font-size:0.8rem">Remove</button
-            > -->
           </div>
         </DragDropList>
       </div>
