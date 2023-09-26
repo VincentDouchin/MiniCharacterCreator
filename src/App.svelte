@@ -3,36 +3,18 @@
   import Display from "./Display.svelte";
   import Section from "./Section.svelte";
   import DragDropList from "./DragDropList.svelte";
-  import { dialog, fs } from "@tauri-apps/api";
+  import { dialog, fs, path } from "@tauri-apps/api";
   import { localStorageData } from "./localStorageData";
   import { loadImageFromPath } from "./loadImages";
-  import {
-    ActionIcon,
-    Button,
-    Card,
-    Checkbox,
-    Chip,
-    Group,
-    Input,
-    SvelteUIProvider,
-    Tabs,
-    Text,
-  } from "@svelteuidev/core";
+  import { ActionIcon, Button, Card, Checkbox, Chip, Group, Input, SvelteUIProvider, Tabs, Text } from "@svelteuidev/core";
   import Fa from "svelte-fa";
-  import {
-    faFolderOpen,
-    faFileExport,
-    faFileArchive,
-    faFileArrowDown,
-    faTrash,
-    faTimes,
-  } from "@fortawesome/free-solid-svg-icons";
+  import { faFolderOpen, faFileExport, faFileArrowDown, faTrash, faTimes } from "@fortawesome/free-solid-svg-icons";
+  import { getPalette, swapPalette, type palette, findFirstPixel, pixelComparator, findFootPixel } from "./utils";
   let tree: fs.FileEntry[] = [];
   let weapons: fs.FileEntry[] = [];
-  const selected = localStorageData<
-    { path: string; index: number; name: string }[]
-  >("selected", []);
+  const selected = localStorageData<{ path: string; index: number; name: string }[]>("selected", []);
   let singleFile = false;
+
   const characterName = localStorageData("characterName", "");
   const root = localStorageData("root", "");
   const targetDirectory = localStorageData("targetDir", "");
@@ -85,9 +67,7 @@
         root.value = newRoot;
         loadTree();
       } else {
-        dialog.message(
-          'The source directory should be named "Generic_NPCs" and contain the animation folders'
-        );
+        dialog.message('The source directory should be named "Generic_NPCs" and contain the animation folders');
       }
     }
   };
@@ -111,149 +91,53 @@
     }
   };
 
-  const select = (event: {
-    detail: { path: string; index: number; name: string };
-  }) => {
-    if (
-      selected.value.some(
-        (x) => x.name === event.detail.name && x.path !== event.detail.path
-      )
-    ) {
-      selected.value = selected.value.map((x) =>
-        x.name === event.detail.name ? event.detail : x
-      );
+  const select = (event: { detail: { path: string; index: number; name: string } }) => {
+    if (selected.value.some((x) => x.name === event.detail.name && x.path !== event.detail.path)) {
+      selected.value = selected.value.map((x) => (x.name === event.detail.name ? event.detail : x));
     } else {
-      selected.value = selected.value.some((x) => x.path === event.detail.path)
-        ? selected.value.filter((x) => x.path !== event.detail.path)
-        : [...selected.value, event.detail];
+      selected.value = selected.value.some((x) => x.path === event.detail.path) ? selected.value.filter((x) => x.path !== event.detail.path) : [...selected.value, event.detail];
     }
   };
   const sortList = (ev: CustomEvent) => {
     selected.value = ev.detail;
   };
-  setContext("selected", selected);
 
-  const saveBuffer = async (
-    buffer: HTMLCanvasElement,
-    name: string = "NPC"
-  ) => {
+  const saveBuffer = async (buffer: HTMLCanvasElement, name: string = "NPC") => {
     if (!targetDirectory) {
       selectTargetDir();
     }
     if (targetDirectory) {
-      const blob = await new Promise<Blob | null>((res) =>
-        buffer.toBlob(res, "png")
-      );
+      const blob = await new Promise<Blob | null>((res) => buffer.toBlob(res, "png"));
       if (blob) {
-        await fs.writeBinaryFile(
-          targetDirectory.value + "/" + name + ".png",
-          await blob.arrayBuffer()
-        );
+        await fs.writeBinaryFile(targetDirectory.value + "/" + name + ".png", await blob.arrayBuffer());
       }
     }
   };
-
-  const findFirstPixel = (
-    img: HTMLImageElement,
-    x: number = 0,
-    y: number = 0
-  ) => {
-    const buffer = document.createElement("canvas");
-    buffer.width = img.width;
-    buffer.height = img.height;
-    const context = buffer.getContext("2d", { alpha: true })!;
-    context.drawImage(img, 0, 0, img.width, img.height);
-    const data = context.getImageData(x, y, 32, 32).data;
-    const firstPixel = (data.findIndex((x) => x !== 0) + 1) / 4;
-    const newX = firstPixel % 32;
-    const newY = Math.floor(firstPixel / 32);
-    return [newX, newY];
-  };
+  $: race = selected.value
+    .find((x) => x.path.includes("_Character"))
+    ?.path.split("\\")
+    .at(-2) as "Elf" | "Human" | "Orc";
+  $: baseColor = {
+    Elf: "elfskin",
+    Human: "whiteskin",
+    Orc: "greenskin",
+  }[race];
   const findCorrespondingHuman = async () => {
     const humanWalk = tree
       ?.find((x) => x?.name === "Walk")
       ?.children?.find((x) => x?.name === "_Characters")
-      ?.children?.find((x) => x?.name === "Human")
-      ?.children?.find((x) => x.name && x.name.includes("white"));
+      ?.children?.find((x) => x?.name === race)
+      ?.children?.find((x) => x.path.includes(baseColor));
     return await loadImageFromPath(humanWalk!.path);
   };
 
-  const createBufferFromImage = (img: HTMLImageElement) => {
-    const c = document.createElement("canvas");
-    c.width = img.width;
-    c.height = img.height;
-    const ctx = c.getContext("2d", { alpha: true });
-    ctx?.drawImage(img, 0, 0);
-    return ctx;
-  };
-  type color = [number, number, number, number];
-  const compareColors = (c1: color, c2: color) => {
-    for (let i = 0; i < 4; i++) {
-      if (c1[i] !== c2[i]) {
-        return false;
-      }
-    }
-    return true;
-  };
-  const getColor = (data: Uint8ClampedArray, index: number): color => [
-    data[index],
-    data[index + 1],
-    data[index + 2],
-    data[index + 3],
-  ];
-  type palette = [color, color][];
-  const getPalette = (human: HTMLImageElement, other: HTMLImageElement) => {
-    const h = createBufferFromImage(human)!.getImageData(0, 0, 32, 32).data;
-    const o = createBufferFromImage(other)!.getImageData(0, 0, 32, 32).data;
-    const palettes: palette = [];
-    for (let i = 0; i < h.length; i += 4) {
-      const color = getColor(h, i);
-      const paletteExists = palettes.some(([srcColor]) =>
-        compareColors(srcColor, color)
-      );
-      if (!paletteExists && color[0] + color[1] + color[2] !== 0) {
-        palettes.push([color, getColor(o, i)]);
-      }
-    }
-    return palettes;
-  };
-  const swapPalette = (img: HTMLImageElement, palette: palette) => {
-    const src = createBufferFromImage(img)!;
-    const imgdata = src.getImageData(0, 0, img.width, img.height);
-    const data = imgdata.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const color = getColor(data, i);
-      const newColor = palette.find((p) => compareColors(p[0], color))?.[1];
-      if (newColor) {
-        data[i] = newColor[0];
-        data[i + 1] = newColor[1];
-        data[i + 2] = newColor[2];
-        data[i + 3] = newColor[3];
-      }
-    }
-    src.putImageData(imgdata, 0, 0);
-
-    return src.canvas;
-  };
-  const getWeaponAnimations = async (
-    folder: fs.FileEntry,
-    name: string,
-    images: HTMLImageElement[],
-    palette: palette,
-    characterIndex: number
-  ) => {
+  const getWeaponAnimations = async (folder: fs.FileEntry, name: string, images: HTMLImageElement[], palette: palette, characterIndex: number) => {
     const character = folder?.children?.find((x) => x.name === "_Characters");
     const weapon = folder?.children?.find((x) => x.name === name);
-    const selectedCharacter = await loadImageFromPath(
-      character?.children?.find((x) => x.name?.includes("human"))?.path!
-    );
+    const selectedCharacter = await loadImageFromPath(character?.children?.find((x) => x.name?.includes(race?.toLowerCase() ?? ""))?.path!);
     const characterPaletteSwapped = swapPalette(selectedCharacter, palette);
-    const front = await loadImageFromPath(
-      weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "f")?.path!
-    );
-    const back = await loadImageFromPath(
-      weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "b")?.path!
-    );
+    const front = await loadImageFromPath(weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "f")?.path!);
+    const back = await loadImageFromPath(weapon?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === "b")?.path!);
     const buffer = document.createElement("canvas");
     buffer.width = selectedCharacter.width;
     buffer.height = selectedCharacter.height;
@@ -264,12 +148,25 @@
       const img = images[i];
       for (let x = 0; x < buffer.width; x += 32) {
         for (let y = 0; y < buffer.height; y += 32) {
-          const [imgX, imgY] = findFirstPixel(images[characterIndex], 0, y);
-          const [offsetX, offsetY] = findFirstPixel(selectedCharacter, x, y);
-          const newX = x + offsetX - imgX;
-          const newY = y + offsetY - imgY;
-          if (offsetX + offsetY != 0) {
-            ctx?.drawImage(img, 0, y, 32, 32, newX, newY, 32, 32);
+          if (selected.value[i].path.includes("Shoes")) {
+            for (let foot = 0; foot < 32; foot += 16) {
+              const [imgX, imgY] = findFootPixel(images[characterIndex], 0, y, foot);
+              const [offsetX, offsetY] = findFootPixel(selectedCharacter, x, y, foot);
+              const newX = x + offsetX - imgX;
+              const newY = y + offsetY - imgY;
+              if (offsetX + offsetY != 0) {
+                ctx?.drawImage(img, 0 + foot, y, 16, 32, newX + foot, newY, 16, 32);
+              }
+            }
+          } else {
+            const comparator = pixelComparator(selected.value[i].path);
+            const [imgX, imgY] = comparator(images[characterIndex], 0, y);
+            const [offsetX, offsetY] = comparator(selectedCharacter, x, y);
+            const newX = x + offsetX - imgX;
+            const newY = y + offsetY - imgY;
+            if (offsetX + offsetY != 0) {
+              ctx?.drawImage(img, 0, y, 32, 32, newX, newY, 32, 32);
+            }
           }
         }
       }
@@ -277,13 +174,12 @@
     ctx?.drawImage(front, 0, 0);
     return ctx;
   };
+
   const generateSprites = async () => {
     const individualSprites: HTMLCanvasElement[] = [];
     const animations = tree.filter((folder) => folder.children);
     if (!selected.value.some((x) => x.path.includes("_Character"))) {
-      return dialog.message(
-        "at least one base character is needed to generate the animations"
-      );
+      return dialog.message("at least one base character is needed to generate the animations");
     }
     for (const { name } of animations) {
       if (!name) return;
@@ -305,17 +201,9 @@
       if (name === "Walk" && weapons.length) {
         for (const weapon of selectedWeapons.value) {
           const humanWalk = await findCorrespondingHuman();
-          const characterIndex = selected.value.findIndex((x) =>
-            x.path.includes("_Character")
-          );
+          const characterIndex = selected.value.findIndex((x) => x.path.includes("_Character"));
           const palette = getPalette(humanWalk, images[characterIndex]);
-          const anim = await getWeaponAnimations(
-            weapons.find((f) => f.children?.some((c) => c.name === weapon))!,
-            weapon,
-            images,
-            palette,
-            characterIndex
-          );
+          const anim = await getWeaponAnimations(weapons.find((f) => f.children?.some((c) => c.name === weapon))!, weapon, images, palette, characterIndex);
           saveBuffer(anim!.canvas, characterName.value + weapon);
 
           const chargedFolder = weapons
@@ -324,17 +212,8 @@
               return f.children?.some((c) => c.name === weapon);
             });
           if (chargedFolder) {
-            const animCharged = await getWeaponAnimations(
-              chargedFolder,
-              weapon,
-              images,
-              palette,
-              characterIndex
-            );
-            saveBuffer(
-              animCharged!.canvas,
-              characterName.value + weapon + "Charged"
-            );
+            const animCharged = await getWeaponAnimations(chargedFolder, weapon, images, palette, characterIndex);
+            saveBuffer(animCharged!.canvas, characterName.value + weapon + "Charged");
           }
         }
       }
@@ -342,94 +221,53 @@
     }
     if (singleFile) {
       const newBuffer = document.createElement("canvas");
-      newBuffer.width = individualSprites.reduce(
-        (acc, v) => Math.max(acc, v.width),
-        0
-      );
-      newBuffer.height = individualSprites.reduce(
-        (acc, v) => acc + v.height,
-        0
-      );
+      newBuffer.width = individualSprites.reduce((acc, v) => Math.max(acc, v.width), 0);
+      newBuffer.height = individualSprites.reduce((acc, v) => acc + v.height, 0);
       let currentHeight = 0;
       const ctx = newBuffer.getContext("2d");
       for (const buffer of individualSprites) {
-        ctx?.drawImage(
-          buffer,
-          0,
-          0,
-          buffer.width,
-          buffer.height,
-          0,
-          currentHeight,
-          buffer.width,
-          buffer.height
-        );
+        ctx?.drawImage(buffer, 0, 0, buffer.width, buffer.height, 0, currentHeight, buffer.width, buffer.height);
         currentHeight += buffer.height;
       }
       saveBuffer(newBuffer, characterName.value || "NPC");
     } else {
       for (let i = 0; i < individualSprites.length; i++) {
-        await saveBuffer(
-          individualSprites[i],
-          characterName.value + animations[i].name
-        );
+        await saveBuffer(individualSprites[i], characterName.value + animations[i].name);
       }
     }
   };
   $: idle = tree.find((x) => x.name === "Idle")?.children;
   let buttons;
-  let weaponsShown: string[] = [];
-  const selectAttackCategory = (name?: string) => {
-    if (name) {
-      weaponsShown = weaponsShown.includes(name)
-        ? weaponsShown.filter((x) => x !== name)
-        : [...weaponsShown, name];
-    }
-  };
   const getWeaponsEntries = (folders: fs.FileEntry[]) => {
     return folders.filter((f) => "children" in f && !f.name?.includes("_"));
   };
   const selectedWeapons = localStorageData<string[]>("weaponsSelected", []);
   const selectWeapon = (name?: string) => {
     if (name) {
-      selectedWeapons.value = selectedWeapons.value.includes(name)
-        ? selectedWeapons.value.filter((x) => x !== name)
-        : [...selectedWeapons.value, name];
+      selectedWeapons.value = selectedWeapons.value.includes(name) ? selectedWeapons.value.filter((x) => x !== name) : [...selectedWeapons.value, name];
     }
   };
   let buttonsLeft: HTMLDivElement | null = null;
 </script>
 
 <SvelteUIProvider themeObserver="dark">
-  <div
-    style="display:grid;grid-template-columns:400px 1fr auto auto;gap:1rem;height:calc(100vh - 2rem);"
-  >
+  <div style="display:grid;grid-template-columns:400px 1fr auto auto;gap:1rem;height:calc(100vh - 2rem);">
     <div>
       <div bind:this={buttonsLeft}>
-        <Button
-          color="gray"
-          on:click={selectDirectory}
-          style="background:{root.value ? '' : 'red'};width:100%"
+        <Button color="gray" on:click={selectDirectory} style="background:{root.value ? '' : 'red'};width:100%"
           ><Fa slot="leftIcon" icon={faFolderOpen} />
           Select source directory<br />(Generic_NPCs)
         </Button>
       </div>
       {#if idle}
-        <div
-          style="max-height:calc(100vh - 2rem - {buttonsLeft.clientHeight}px);overflow-y:auto"
-        >
+        <div style="max-height:calc(100vh - 2rem - {buttonsLeft.clientHeight}px);overflow-y:auto">
           <Tabs>
             {#each [["Body", "Body"], ["Head", "Head"], ["Characters", "_Characters"]] as [label, name]}
               <Tabs.Tab {label}>
                 {#if idle.find((x) => x.name === name)?.children}
                   {#each idle.find((x) => x.name === name)?.children ?? [] as child}
                     <div>
-                      <Section
-                        name={child.name ?? ""}
-                        children={child.children ?? []}
-                        on:selected={select}
-                        selected={selected.value}
-                      />
+                      <Section name={child.name ?? ""} children={child.children ?? []} on:selected={select} selected={selected.value} />
                     </div>
                   {/each}
                 {/if}
@@ -440,29 +278,15 @@
       {/if}
     </div>
 
-    <div
-      style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;height: 100%; place-items: center;"
-    >
+    <div style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;height: 100%; place-items: center;">
       <div>
         <Group>
-          <Button
-            color="gray"
-            on:click={selectTargetDir}
-            style="background:{targetDirectory.value ? '' : 'red'}"
-          >
+          <Button color="gray" on:click={selectTargetDir} style="background:{targetDirectory.value ? '' : 'red'}">
             <Fa slot="leftIcon" icon={faFileArrowDown} />
             Select target directory
           </Button>
-          <Input
-            placeholder="Character name"
-            style="padding:0.5rem"
-            bind:value={characterName.value}
-          />
-          <Checkbox
-            label=" Single file"
-            bind:value={singleFile}
-            type="checkbox"
-          />
+          <Input placeholder="Character name" style="padding:0.5rem" bind:value={characterName.value} />
+          <Checkbox label=" Single file" bind:value={singleFile} type="checkbox" />
 
           <Button color="gray" on:click={generateSprites} style="margin:auto">
             <Fa slot="leftIcon" icon={faFileExport} />
@@ -470,9 +294,7 @@
           </Button>
         </Group>
       </div>
-      <div
-        style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;"
-      >
+      <div style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;">
         {#each selected.value as img}
           {#key img.path}
             <div style="grid-area:1/1/1/1">
@@ -482,32 +304,18 @@
         {/each}
       </div>
     </div>
-    <div
-      style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem"
-    >
+    <div style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem">
       <div bind:this={buttons} style="display:grid;gap:0.2rem;">
         <Button color="gray" on:click={() => (selected.value = [])}>
           <Fa slot="leftIcon" icon={faTrash} />
           Clear</Button
         >
       </div>
-      <div
-        style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ??
-          0 + 10}px);overflow:auto"
-      >
-        <DragDropList
-          list={selected.value}
-          let:item
-          key="path"
-          on:sort={sortList}
-        >
+      <div style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ?? 0 + 10}px);overflow:auto">
+        <DragDropList list={selected.value} let:item key="path" on:sort={sortList}>
           <div style="display:grid;place-items:center">
             <Card padding="xs" style="position:relative">
-              <ActionIcon
-                variant="filled"
-                style="position:absolute;top:0px;right:0px"
-                on:click={() => select({ detail: item })}
-              >
+              <ActionIcon variant="outline" size="xs" style="position:absolute;top:0.2rem;right:0.2rem" on:click={() => select({ detail: item })}>
                 <Fa icon={faTimes} />
               </ActionIcon>
               <Display path={item.path} />
@@ -520,14 +328,8 @@
       <Text align="center" size="lg" weight="bold">Animations</Text>
       <Tabs>
         <Tabs.Tab label="Weapons">
-          <div
-            style="font-size:0.8rem;display:flex;gap:0.5rem;flex-direction:column"
-          >
-            <Button
-              color="gray"
-              on:click={selectWeaponsDir}
-              style="background:{weaponsDir.value ? '' : 'red'};width:100%"
-            >
+          <div style="font-size:0.8rem;display:flex;gap:0.5rem;flex-direction:column">
+            <Button color="gray" on:click={selectWeaponsDir} style="background:{weaponsDir.value ? '' : 'red'};width:100%">
               <Fa slot="leftIcon" icon={faFolderOpen} />
               Select source directory<br />(Weapons)
             </Button>
@@ -543,14 +345,7 @@
                   <Group spacing="xs" direction="column">
                     {#if name && children}
                       {#each getWeaponsEntries(children) as weapon}
-                        <Chip
-                          size="xs"
-                          variant="filled"
-                          checked={weapon.name &&
-                            selectedWeapons.value.includes(weapon.name)}
-                          on:click={() => selectWeapon(weapon.name)}
-                          >{weapon.name}
-                        </Chip>
+                        <Chip size="xs" variant="filled" checked={weapon.name && selectedWeapons.value.includes(weapon.name)} on:click={() => selectWeapon(weapon.name)}>{weapon.name}</Chip>
                       {/each}
                     {/if}
                   </Group>
