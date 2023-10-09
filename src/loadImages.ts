@@ -1,5 +1,5 @@
 import { fs } from "@tauri-apps/api";
-const images: Record<string, HTMLImageElement> = {}
+const images: Record<string, HTMLImageElement|HTMLCanvasElement> = {}
 export const urls: Record<string, string> = {}
 export const loadImageFromPath = (path: string) => {
 	if (images[path]) return images[path]
@@ -16,3 +16,7 @@ export const loadImageFromPath = (path: string) => {
 		};
 	});
 };
+export const overwriteImage = (path:string,img:HTMLCanvasElement)=>{
+	images[path] = img
+	urls[path] = img.toDataURL()
+}

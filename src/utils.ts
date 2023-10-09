@@ -2,7 +2,7 @@ export type color = [number, number, number, number];
 
 export type palette = [color, color][];
 
-export const createBufferFromImage = (img: HTMLImageElement) => {
+export const createBufferFromImage = (img: HTMLImageElement|HTMLCanvasElement) => {
 	const c = document.createElement("canvas");
 	c.width = img.width;
 	c.height = img.height;
@@ -10,7 +10,7 @@ export const createBufferFromImage = (img: HTMLImageElement) => {
 	ctx?.drawImage(img, 0, 0);
 	return ctx;
 };
-export const getPalette = (human: HTMLImageElement, other: HTMLImageElement) => {
+export const getPalette = (human: HTMLImageElement|HTMLCanvasElement, other: HTMLImageElement|HTMLCanvasElement) => {
 	const h = createBufferFromImage(human)!.getImageData(0, 0, 32, 32).data;
 	const o = createBufferFromImage(other)!.getImageData(0, 0, 32, 32).data;
 	const palettes: palette = [];
@@ -39,7 +39,7 @@ export const compareColors = (c1: color, c2: color) => {
 	}
 	return true;
 };
-export const swapPalette = (img: HTMLImageElement, palette: palette) => {
+export const swapPalette = (img: HTMLImageElement|HTMLCanvasElement, palette: palette) => {
 	const src = createBufferFromImage(img)!;
 	const imgdata = src.getImageData(0, 0, img.width, img.height);
 	const data = imgdata.data;
@@ -64,7 +64,7 @@ const getCoordsFromIndex = (index: number, width = 32) => {
 	return [newX, newY];
 }
 export const findFirstPixel = (
-	img: HTMLImageElement,
+	img: HTMLImageElement|HTMLCanvasElement,
 	x: number = 0,
 	y: number = 0,
 	_offser = 0
@@ -81,7 +81,7 @@ export const isPixelColor = (data: Uint8ClampedArray) => (index: number, offset 
 	return data[i] !== 0 && data[i + 1] !== 0 && data[i + 2] !== 0 && (data[i + 3] !== 0 || data[i + 3] !== 255)
 }
 export const findBodyPixel = (
-	img: HTMLImageElement,
+	img: HTMLImageElement|HTMLCanvasElement,
 	x: number = 0,
 	y: number = 0,
 	_offset = 0
@@ -99,7 +99,7 @@ export const findBodyPixel = (
 }
 
 export const findFootPixel = (
-	img: HTMLImageElement,
+	img: HTMLImageElement|HTMLCanvasElement,
 	x: number = 0,
 	y: number = 0,
 	xOffset = 0
