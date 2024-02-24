@@ -29,6 +29,7 @@
     faTimes,
     faSpinner,
     faCheckCircle,
+    faDice,
   } from "@fortawesome/free-solid-svg-icons";
   import {
     getPalette,
@@ -532,9 +533,11 @@
       const folder = idle?.find((x) => x.name === place);
       if (!folder) continue;
       for (const piece of pieces) {
-        const subFolder = folder.children?.find(
-          (x) => x.name === piece,
-        )?.children;
+        const subFolder = folder.children
+          ?.find((x) => x.name === piece)
+          ?.children?.filter(
+            (x) => !selected.value.some((y) => y.path === x.path),
+          );
         if (!subFolder) continue;
         let randomSelected =
           subFolder[Math.floor(Math.random() * subFolder.length)];
@@ -557,6 +560,27 @@
       }
     }
   };
+  const randomSingle = (files: fs.FileEntry[] | undefined, piece: string) => {
+    if (!files) return;
+    files = files.filter((x) => !selected.value.some((y) => y.path === x.path));
+    let randomSelected = files[Math.floor(Math.random() * files?.length)];
+    if (randomSelected.children?.length) {
+      randomSelected =
+        randomSelected.children[
+          Math.floor(Math.random() * randomSelected.children.length)
+        ];
+    }
+    if (!randomSelected.name) return;
+    const newSelected = {
+      name: piece,
+      path: randomSelected.path,
+      index: 0,
+    };
+
+    selected.value = selected.value.some((x) => x.name === piece)
+      ? selected.value.map((x) => (x.name === piece ? newSelected : x))
+      : [...selected.value, newSelected];
+  };
 </script>
 
 <SvelteUIProvider themeObserver="dark">
@@ -567,12 +591,22 @@
           <Text size="sm" weight="bold">{label}</Text>
           {#each idle.find((x) => x.name === name)?.children ?? [] as child}
             {#if child.name}
-              <div style="margin-left:1rem">
+              <div
+                style="margin-left:1rem;display:flex;justify-content:space-between"
+              >
                 <Checkbox
                   label={child.name}
                   checked={random.value[name].includes(child.name)}
                   on:click={addRandom(name, child.name)}
                 ></Checkbox>
+                <Button
+                  size="sm"
+                  compact
+                  color="gray"
+                  on:click={randomSingle(child.children, child.name)}
+                >
+                  <Fa icon={faDice} /></Button
+                >
               </div>
             {/if}
           {/each}
